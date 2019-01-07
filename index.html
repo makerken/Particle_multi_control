@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8"/>
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.2.4/jquery.min.js"></script>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquerymobile/1.4.5/jquery.mobile.min.js"></script>
+        <link href="https://ajax.googleapis.com/ajax/libs/jquerymobile/1.4.5/jquery.mobile.min.css" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+        <style>
+            @import url('https://fonts.googleapis.com/css?family=Lato:300,700');
+            @viewport{ zoom: 1.0; width: extend-to-zoom; }
+            .ui-page-theme-a {
+                background: repeating-linear-gradient( 135deg, #333, #333 10px, #444 10px, #444 20px);
+                font-family: 'Lato', sans-serif;
+            }
+            .spectrum .ui-slider-track {
+                background: linear-gradient(to right, #F00,#FF0,#0F0,#0FF,#00F,#F0F,#F00);
+            }
+            .full-width-slider input {
+                display: none;
+            }
+            .full-width-slider .ui-slider-track {
+                margin-left: 15px;
+                border-style: none;
+            }
+            .material-icons {
+                font-weight: inherit;
+                vertical-align: bottom;
+            }
+            .device {
+                padding: 0.3em 0;
+                width: calc(100% - 2em);
+                margin: 1em auto;
+                background: #FFF;
+                border-radius: 4px;
+            }
+            .ui-controlgroup-horizontal .ui-controlgroup-controls .ui-btn {
+                border: 2px solid #000;
+            }
+            .ui-controlgroup-horizontal .ui-controlgroup-controls .ui-btn.ui-last-child {
+                border-left: 0;
+                border-right-width: 2px;
+            }
+            .power-button, room-name {
+                margin-left: 15px;
+                display: inline-block;
+            }
+            room-name {
+                font-size: 2em;
+                vertical-align: -0.2em;
+            }
+        </style>
+
+        <meta name="viewport" content="width=device-width">
+    </head>
+<body>
+
+    <div id="devices"></div>
+
+    <script>
+
+        // keep this website private, you can run it locally, or share it to yourself e.g. dropbox or email, it has your access information (resetable)
+        var accessToken = "under_build_particle_io_settings";
+
+        // add/remove devices here
+        var devices = [
+
+            { room     : "Outside",
+              id       : "build_particle_io_devices_disclosureArrow",
+              color    : new Color },
+
+            { room     : "Workroom",
+              id       : "build_particle_io_devices_disclosureArrow",
+              color    : new Color },
+
+        ];
+
+        // Room UI controls
+        (function () {
+                            
+            var roomControl = "";
+
+            for (var i = 0; i < devices.length; i++) {
+                
+                var powerButtonUI =`<form class="power-button">
+                    <fieldset data-role="controlgroup" data-type="horizontal">
+                        <input type="checkbox" name="power_`+i+`" id="power_`+i+`" disabled="">
+                        <label for="power_`+i+`"> <i id="power_icon_`+i+`" class="material-icons">cached</i> </label>
+                        <input type="checkbox" name="color_`+i+`" id="color_`+i+`" disabled="">
+                        <label for="color_`+i+`" id="color_indicator_`+i+`"> <i style="text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff;" class="material-icons">format_color_fill</i> </label>
+                    </fieldset>
+                </form>`;
+
+                var name = '<room-name>'+devices[i].room+'</room-name>';
+
+                var hue_SliderUI = `<form class="full-width-slider room_ui spectrum" style="display: none;" id="hue_` + i + `">
+                    <input class="ui-hidden-accessible full-width-slider" type="range" id="hue_slider_` + i + `" value="794" min="0" max="1589" animate="true" />
+                </form>`;
+
+                var brightnessSliderUI = `<form class="full-width-slider room_ui" style="display: none;" id="brightness_` + i + `">
+                    <input class="ui-hidden-accessible" type="range" id="brightness_slider_` + i + `" value="0" min="-255" max="255" animate="true" />
+                </form>`;
+
+                roomControl += '<div class="device">' + powerButtonUI + name + hue_SliderUI + brightnessSliderUI + '</div>';
+
+            }
+
+            $(roomControl).appendTo("#devices");
+
+        }());
+
+        // color  constructor
+        function Color() {
+
+            this.firstUpdate = true;
+            this.power = false;
+            this.new = false;
+            this.sending = false;
+            var slider_hue = 794;
+            var slider_brightness = 0;
+            var red = 0;
+            var green = 0;
+            var blue = 0;
+            var rgb = [0,0,0];
+            var webhue = "#ffff00";
+            var web = "#fffed1";
+            var single24 = 65280;
+            var sendString = "";        // power, 24-bit color, hue_ slider, brightness slider
+
+            Object.defineProperty(this, 'slider_hue', {
+                get: function() {
+                    return slider_hue;
+                },
+                set: function( value ) {
+                    slider_hue = value;
+                    calcColor();
+                }
+            });
+
+            Object.defineProperty(this, 'slider_brightness', {
+                get: function() {
+                    return slider_brightness;
+                },
+                set: function( value ) {
+                    slider_brightness = value;
+                    calcColor();
+                }
+            });
+
+            Object.defineProperty(this, 'sendString', {
+                get: function() {
+                    sendString = (this.power | 0);        // encodes true/false as 1/0
+                    sendString += '_' + single24;
+                    sendString += '_' + slider_hue;
+                    sendString += '_' + slider_brightness;
+                    return sendString;
+                },
+            });
+
+            Object.defineProperty(this, 'webhue', {
+                get: function() {
+                    return webhue;
+                },
+            });
+
+            Object.defineProperty(this, 'web', {
+                get: function() {
+                    return web;
+                },
+            });
+
+            Object.defineProperty(this, 'rgb', {
+                get: function() {
+                    return rgb;
+                },
+            });
+
+            function calcColor() {
+                var sliderDetail = 256;
+                red = Math.abs( slider_hue - 3*sliderDetail ) - sliderDetail;
+                green = -Math.abs( slider_hue - 2*sliderDetail ) + sliderDetail*2;
+                blue = -Math.abs( slider_hue - 4*sliderDetail ) + sliderDetail*2;
+
+                function guard( colorValue ) {
+                    if ( colorValue > 255 ) {
+                        return 255;
+                    } else if ( colorValue < 0 ) {
+                        return 0;
+                    } else {
+                        return colorValue;
+                    };
+                };
+
+                red = guard( red );
+                green = guard( green );
+                blue = guard( blue );
+
+                webhue = '#' + (( red << 16 ) + ( green << 8) + blue ).toString(16).padStart(6, "0");
+
+                function applyBrightness( cValue, bValue ) {
+                    if ( bValue > 0 ) {
+                        return Math.floor( cValue + ( 255 - cValue ) / 255 * bValue );
+                    } else {
+                        return Math.floor( cValue + ( cValue - 0 ) / 255 * bValue );
+                    };
+                };
+
+                red = applyBrightness( red, slider_brightness );
+                green = applyBrightness( green, slider_brightness );
+                blue = applyBrightness( blue, slider_brightness );
+
+                rgb = [ red, green, blue ];
+                single24 = (red << 16) + (green << 8) + blue;
+                web = '#' + single24.toString(16).padStart(6, "0");
+            }
+
+        }
+
+        /********* REST **********/
+        function comm( type, deviceNum ) {
+
+            if( type === "GET" ) {
+
+                $.ajax({
+                    method: "GET",
+                    url: "https://api.particle.io/v1/devices/" + devices[deviceNum].id + "/json?access_token=" + accessToken,
+                    dataType: "json",
+                    timeout: 5000,
+                })
+                .done( function(data) {
+                    console.log('GET success');
+                    var obj = JSON.parse( data.result );
+                    updateFromDevice( deviceNum, obj );
+
+                    buttonSuccess(deviceNum);    
+                })
+                .fail( function(data) {
+
+                    if( data.statusText == "timeout" ) {
+                        buttonTimeout(deviceNum);
+                        console.log('Room ' + deviceNum + ' did not respond, trying again after ' + timeoutDelay/1000 + 's');
+                        setTimeout( function() { comm("GET", deviceNum); }, 10000 );        // try again in 10s
+                    } else if ( data.statusText == "error" ) {
+                        buttonError(deviceNum);
+                        console.log( 'see above error in console' );
+                    }
+
+                });
+
+            } else if ( type === "POST") {
+
+                if( devices[deviceNum].color.new == true || devices[deviceNum].color.sending == true ) {
+
+                    devices[deviceNum].color.new = false;
+                    devices[deviceNum].color.sending = true;
+
+                    var particleFunction = "room"
+
+                    $.ajax({
+                        method: "POST",
+                        url: "https://api.particle.io/v1/devices/" + devices[deviceNum].id + "/" + particleFunction + "?access_token=" + accessToken,
+                        data: { control: devices[deviceNum].color.sendString }
+                    })
+                    .done( function(data) {
+                        console.log('successful POST on device ' + deviceNum);
+                        devices[deviceNum].color.sending = false;
+                    })
+                    .fail( function(data) {
+
+                        console.log('fail POST ' + devices[deviceNum].room + data.responseJSON.error);
+
+                        if( data.responseJSON.error == "Timed out." ) {
+                            buttonTimeout(deviceNum);
+                            var timeoutDelay = 10000;
+                            console.log('Trying again to communicate with the ' + devices[deviceNum].room + 'Particle in ' + timeoutDelay/1000 + 's');
+                            setTimeout( function() { comm("POST", deviceNum); }, timeoutDelay );
+
+                        } else {
+                            buttonError(deviceNum);
+                            console.log(devices[deviceNum].room + ' is offline');
+                            // Function "x" not found
+                            console.log(data.responseJSON.error);
+                        }
+                    })
+                }
+            }
+        }
+
+        // start get requests
+        $(document).ready(function() {
+
+            for (var i = 0; i < devices.length; i++) {
+                // buttonSuccess(i);
+                comm( "GET", i );
+            }
+
+        });
+
+        /********* UI **********/
+
+        // button states
+        function buttonSuccess( device ) {
+            $("#power_icon_" + device).html('power_settings_new');
+            $("#power_" + device).checkboxradio('enable');
+            $("#color_" + device).removeAttr("disabled").checkboxradio("refresh"); 
+            
+            // devices[powerSwitchRoom].color.power = this.checked;
+            $("#hue_" + device).css("display", "");
+            $("#brightness_" + device).css("display", "");
+            // $("#color_indicator_" + device).css( "background", devices[device].color.web);
+        };
+
+        function buttonTimeout( device ) {
+            $("#power_icon_" + device).html('restore');
+        };
+
+        function buttonError( device ) {
+            $("#power_icon_" + device).html('error_outline');
+        };
+
+        // listeners
+        $(document).ready(function() {
+
+            for( var i = 0; i < devices.length; i++ ) {
+                $("#power_"+i).on("click", {device: i}, function(e) {updatePower(e.data.device); });
+                $("#hue_"+i).on("change", {device: i}, function(e) { updateHue(e.data.device); });
+                $("#brightness_"+i).on("change", {device: i}, function(e) {updateBrightness(e.data.device); });
+            }
+
+        });
+
+        // control functions
+        function updatePower(i) {
+
+            if( devices[i].color.power != $("#power_"+i).is(":checked") ) {
+                devices[i].color.power = $("#power_"+i).is(":checked");
+                devices[i].color.new = true;
+            };
+
+            if (devices[i].color.power == true ) {
+                $("#color_indicator_" + i).css( "background", devices[i].color.web);
+                if( devices[i].color.firstUpdate != true ){
+                    devices[i].color.new = true;
+                };
+            } else {
+                $("#color_indicator_" + i).css( "background", "#f6f6f6");
+            };
+            
+            if( devices[i].color.new == true ) {
+                // TODO: a loading bar that shows the the delay
+                setTimeout( function() { comm("POST", i); }, 1000 );
+            }
+
+        };
+
+        function updateHue(i) {
+            devices[i].color.slider_hue = parseInt( $("#hue_slider_"+i).val() );
+            $("#hue_" + i + " .ui-slider-track .ui-btn.ui-slider-handle").css( "background", devices[i].color.webhue);
+            $("#brightness_" + i + " .ui-slider-track" ).css( "background", "linear-gradient(to right, #000," + devices[i].color.webhue + ",#FFF" );
+            $("#brightness_" + i + " .ui-slider-track .ui-btn.ui-slider-handle" ).css( "background", devices[i].color.web);
+            updatePower(i);
+        };
+
+        function updateBrightness(i) {
+            devices[i].color.slider_brightness = parseInt( $("#brightness_slider_"+i).val() );
+            $( "#brightness_" + i + " .ui-slider-track .ui-btn.ui-slider-handle" ).css( "background", devices[i].color.web);
+            updatePower(i);
+        };
+
+        function updateFromDevice( i, json ) {
+
+            if( devices[i].color.firstUpdate == true ) {
+
+                console.log(json);
+                
+                devices[i].color.slider_hue = json.sh;
+                $("#hue_slider_"+i).val( devices[i].color.slider_hue ).slider("refresh");
+                updateHue(i);
+
+                devices[i].color.slider_brightness = json.sb;
+                $("#brightness_slider_"+i).val( devices[i].color.slider_brightness ).slider("refresh");
+                updateBrightness(i);
+
+                devices[i].color.power = json.p;
+                if(json.p == 1) {
+                    $("#power_" + i).attr('checked', true ).checkboxradio("refresh");
+                } else {
+                    $("#power_" + i).attr('checked', false ).checkboxradio("refresh");
+                }
+
+                updatePower(i);
+
+                devices[i].color.firstUpdate = false;
+            } 
+
+        }
+
+    </script>
+
+</body>
+</html>
