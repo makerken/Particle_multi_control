@@ -66,11 +66,15 @@
         // add/remove devices here
         var devices = [
 
-            { room     : "Outside",
+            { room     : "Bedroom",
               id       : "build_particle_io_devices_disclosureArrow",
               color    : new Color },
 
-            { room     : "Workroom",
+            { room     : "Living Room",
+              id       : "build_particle_io_devices_disclosureArrow",
+              color    : new Color },
+
+            { room     : "Kitchen",
               id       : "build_particle_io_devices_disclosureArrow",
               color    : new Color },
 
@@ -291,7 +295,7 @@
         $(document).ready(function() {
 
             for (var i = 0; i < devices.length; i++) {
-                // buttonSuccess(i);
+                // buttonSuccess(i);    // uncomment if you want to see control details without a response
                 comm( "GET", i );
             }
 
